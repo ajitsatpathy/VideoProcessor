@@ -237,15 +237,15 @@ namespace VideoProcessorApp
                 speed = 2.0; // Default fallback
             }
 
-            // Sort the uploaded videos by name or filename to maintain order
-            var videoFiles = new List<string>();
+            // Sort the uploaded videos by numerical index to maintain exact sequence
+            var videoPartList = new List<MultipartParser.FilePart>();
             string bgMusicFile = null;
 
             foreach (var file in parseResult.Files)
             {
                 if (file.Name.StartsWith("video_"))
                 {
-                    videoFiles.Add(file.TempFilePath);
+                    videoPartList.Add(file);
                 }
                 else if (file.Name == "bgMusic")
                 {
@@ -253,17 +253,28 @@ namespace VideoProcessorApp
                 }
             }
 
+            videoPartList.Sort((a, b) =>
+            {
+                int idxA, idxB;
+                string suffixA = a.Name.Substring("video_".Length);
+                string suffixB = b.Name.Substring("video_".Length);
+                if (int.TryParse(suffixA, out idxA) && int.TryParse(suffixB, out idxB))
+                {
+                    return idxA.CompareTo(idxB);
+                }
+                return string.Compare(a.Name, b.Name, StringComparison.Ordinal);
+            });
+
+            var videoFiles = new List<string>();
+            foreach (var file in videoPartList)
+            {
+                videoFiles.Add(file.TempFilePath);
+            }
+
             if (videoFiles.Count == 0)
             {
                 response.StatusCode = (int)HttpStatusCode.BadRequest;
                 SendJson(response, "{\"error\": \"No videos uploaded. At least one video file is required.\"}");
-                return;
-            }
-
-            if (videoFiles.Count > 10)
-            {
-                response.StatusCode = (int)HttpStatusCode.BadRequest;
-                SendJson(response, "{\"error\": \"Too many files. You can upload up to 10 videos.\"}");
                 return;
             }
 
@@ -769,7 +780,7 @@ namespace VideoProcessorApp
     <div class=""container"">
         <header>
             <h1>Video & Music Fusion Engine</h1>
-            <p>Join up to 10 videos, increase speed, and bind with custom background music in seconds.</p>
+            <p>Join multiple videos, increase speed, and bind with custom background music in seconds.</p>
         </header>
 
         <div class=""upload-section"">
@@ -779,7 +790,7 @@ namespace VideoProcessorApp
                     <path stroke-linecap=""round"" stroke-linejoin=""round"" stroke-width=""2"" d=""M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"" />
                 </svg>
                 <h3>Upload Videos</h3>
-                <p>Select up to 10 videos. Drag and drop supported.</p>
+                <p>Select videos to merge. Drag and drop supported.</p>
                 <p style=""margin-top:0.25rem; font-size:0.75rem; color:#6366f1;"">Videos will be merged in the order they are added</p>
                 <input type=""file"" id=""videoInput"" class=""file-input"" multiple accept=""video/*"">
                 <div class=""file-list"" id=""videoList"" onclick=""event.stopPropagation()""></div>
@@ -882,10 +893,6 @@ namespace VideoProcessorApp
 
         function addVideos(files) {
             for (let i = 0; i < files.length; i++) {
-                if (selectedVideos.length >= 10) {
-                    alert('You can upload up to 10 videos maximum.');
-                    break;
-                }
                 const file = files[i];
                 if (file.type.startsWith('video/')) {
                     selectedVideos.push(file);
@@ -969,8 +976,8 @@ namespace VideoProcessorApp
             formData.append('speed', selectedSpeed);
             
             selectedVideos.forEach((file, idx) => {
-                // Ensure name is formatted 'video_XX' for proper sorting on backend
-                const nameIdx = String(idx).padStart(2, '0');
+                // Ensure name is formatted 'video_XXXX' for proper sorting
+                const nameIdx = String(idx).padStart(4, '0');
                 formData.append(`video_${nameIdx}`, file);
             });
 
